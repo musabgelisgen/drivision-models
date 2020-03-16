@@ -17,7 +17,7 @@ bunlari yaptiktan sonra ben pycharm kullandigim icin yapmaniz gerekenler pycharm
 
 file -> other settings -> preferences for new projects -> project interpreter
 
-burada secili bir interpreter yoksa, sag taraftaki + ya basarak interpreter ekleyin. interpreterin gosterdigi konum "drivision-models/venv/bin/python" olmali.
+burada secili bir interpreter yoksa, sag taraftaki + ya basarak interpreter ekleyin. interpreterin gosterdigi konum "drivision-models/venv/bin/python" olmali. (bunu yapmadan da calisabilir aslinda ama garanti olsun diye ekledim)
 
 apply ve ok deyin.
 
