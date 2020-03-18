@@ -1,6 +1,10 @@
 Flask app for cloud models of drivision
 
-HOW TO RUN
+## HOW TO RUN (WITH DOCKER)
+docker-compose up --build 
+
+
+## HOW TO RUN (WITHOUT DOCKER)
 
 reference: https://www.alexkras.com/how-to-use-virtualenv-in-python-to-install-packages-locally/
 
