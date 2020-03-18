@@ -1,0 +1,10 @@
+version: '3'
+services:
+  drivision-models:
+    image: mgelisgen/drivision-models:0.2
+    build: .
+    ports:
+      - "81:80"
+    volumes:
+      - .:/deploy
+      - /dev/null:/deploy/output.log
