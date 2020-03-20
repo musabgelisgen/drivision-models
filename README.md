@@ -1,6 +1,6 @@
 Flask app for cloud models of drivision
 
-Download lane detection models from https://www.dropbox.com/sh/tnsf0lw6psszvy4/AAA81r53jpUI3wLsRW6TiPCya?dl=0 and put them under model/downloaded_model/
+Download lane detection models from https://www.dropbox.com/sh/tnsf0lw6psszvy4/AAA81r53jpUI3wLsRW6TiPCya?dl=0 and put them under models/lane_detection/downloaded_model/
 
 ## HOW TO RUN (WITH DOCKER)
 docker-compose up --build 
