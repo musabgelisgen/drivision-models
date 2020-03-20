@@ -3,3 +3,4 @@
 __pycache__/
 output.log
 venv/
+models/lane_detection/downloaded_model

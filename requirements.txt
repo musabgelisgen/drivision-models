@@ -2,5 +2,11 @@ opencv-python
 numpy
 scikit-image
 tensorflow
-# tensorflow.keras.models
 flask
+tensorflow-gpu
+tensorflow-estimator
+glog
+scikit-learn
+scipy
+matplotlib
+easydict
