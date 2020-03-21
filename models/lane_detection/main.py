@@ -1,29 +1,18 @@
+import cv2
+import os
+import matplotlib.pyplot as plt
 from calibration_utils import calibrate_camera, undistort
 from binarization_utils import binarize
 from perspective_utils import birdeye
 from line_utils import get_fits_by_sliding_windows, draw_back_onto_the_road, Line, get_fits_by_previous_fits
-from tensorflow.keras.models import load_model
 from moviepy.editor import VideoFileClip
 import numpy as np
 from globals import xm_per_pix, time_window
-from skimage import transform
-from skimage import exposure
-from flask import Flask, request, jsonify
-import numpy as np
-import cv2
-import json
-import tensorflow as tf
-import glog as log
-import matplotlib.pyplot as plt
 
 
 processed_frames = 0                    # counter of frames processed (when processing video)
 line_lt = Line(buffer_len=time_window)  # line on the left of the lane
 line_rt = Line(buffer_len=time_window)  # line on the right of the lane
-sign_recognition_model = None
-sign_recognition_label_names = None
-app = Flask(__name__)
-
 
 
 def prepare_out_blend_frame(blend_on_road, img_binary, img_birdeye, img_fit, line_lt, line_rt, offset_meter):
@@ -138,53 +127,30 @@ def process_pipeline(frame, keep_state=True):
 
     return blend_output
 
-@app.route('/predict', methods=['POST'])
-def get_prediction():
-    filestr = request.files['file'].read()  # "file" key'i ile gonderilen resmi al
-    npimg = np.frombuffer(filestr, np.uint8)
-    image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-    curr_sign_recognition_label = process_sign_recognition(image)
-    blend = process_pipeline(image, keep_state=False)
-
-    '''
-    print(blend.shape)
-    plt.figure('image')
-    plt.imshow(blend)
-    cv2.imwrite('Output_image.png', blend)
-    '''
-    lists =blend.tolist()
-    json_str = json.dumps(lists)
-    return jsonify(sign=curr_sign_recognition_label, lane=json_str)
-
-
-def load_sign_recognition_model():
-    global sign_recognition_model
-    global sign_recognition_label_names
-
-    print("[INFO] loading sign recognition model...")
-    sign_recognition_model = load_model("models/sign_recognition")
-    sign_recognition_label_names = open("models/sign_recognition/labels/signnames.csv").read().strip().split("\n")[1:]
-    sign_recognition_label_names = [l.split(",")[1] for l in sign_recognition_label_names]
-
-
-def process_sign_recognition(image):
-    image = transform.resize(image, (32, 32))
-    image = exposure.equalize_adapthist(image, clip_limit=0.1)
-
-    # preprocess the image by scaling it to the range [0, 1]
-    image = image.astype("float32") / 255.0
-    image = np.expand_dims(image, axis=0)
-    predictions = sign_recognition_model.predict(image)
-    j = predictions.argmax(axis=1)[0]
-    curr_label = sign_recognition_label_names[j]
-    return curr_label
-
-
 
 if __name__ == '__main__':
-    # load model at the beginning once only
-    load_sign_recognition_model()
+
     # first things first: calibrate the camera
     ret, mtx, dist, rvecs, tvecs = calibrate_camera(calib_images_dir='camera_cal')
 
-    app.run(debug=True, host='0.0.0.0', port=1025)
+    mode = 'images'
+
+    if mode == 'video':
+
+        selector = 'project'
+        clip = VideoFileClip('{}_video.mp4'.format(selector)).fl_image(process_pipeline)
+        clip.write_videofile('out_{}_{}.mp4'.format(selector, time_window), audio=False)
+
+    else:
+
+        test_img_dir = 'test_images'
+        for test_img in os.listdir(test_img_dir):
+
+            frame = cv2.imread(os.path.join(test_img_dir, test_img))
+
+            blend = process_pipeline(frame, keep_state=False)
+
+            cv2.imwrite('output_images/{}'.format(test_img), blend)
+
+            plt.imshow(cv2.cvtColor(blend, code=cv2.COLOR_BGR2RGB))
+            plt.show()
