@@ -3,10 +3,10 @@ import cv2
 import glob
 import collections
 import matplotlib.pyplot as plt
-from calibration_utils import calibrate_camera, undistort
-from binarization_utils import binarize
-from perspective_utils import birdeye
-from globals import ym_per_pix, xm_per_pix
+from models.lane_detection.calibration_utils import calibrate_camera, undistort
+from models.lane_detection.binarization_utils import binarize
+from models.lane_detection.perspective_utils import birdeye
+from models.lane_detection.globals import ym_per_pix, xm_per_pix
 
 
 class Line:

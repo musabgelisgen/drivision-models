@@ -2,8 +2,8 @@ import numpy as np
 import cv2
 import glob
 import matplotlib.pyplot as plt
-from calibration_utils import calibrate_camera, undistort
-from binarization_utils import binarize
+from models.lane_detection.calibration_utils import calibrate_camera, undistort
+from models.lane_detection.binarization_utils import binarize
 
 
 def birdeye(img, verbose=False):

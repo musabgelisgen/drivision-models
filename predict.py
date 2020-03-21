@@ -1,20 +1,16 @@
-from calibration_utils import calibrate_camera, undistort
-from binarization_utils import binarize
-from perspective_utils import birdeye
-from line_utils import get_fits_by_sliding_windows, draw_back_onto_the_road, Line, get_fits_by_previous_fits
+from models.lane_detection.calibration_utils import calibrate_camera, undistort
+from models.lane_detection.binarization_utils import binarize
+from models.lane_detection.perspective_utils import birdeye
+from models.lane_detection.line_utils import get_fits_by_sliding_windows, draw_back_onto_the_road, Line, get_fits_by_previous_fits
+from models.lane_detection.globals import xm_per_pix, time_window
+
 from tensorflow.keras.models import load_model
-from moviepy.editor import VideoFileClip
-import numpy as np
-from globals import xm_per_pix, time_window
 from skimage import transform
 from skimage import exposure
 from flask import Flask, request, jsonify
 import numpy as np
 import cv2
 import json
-import tensorflow as tf
-import glog as log
-import matplotlib.pyplot as plt
 
 
 processed_frames = 0                    # counter of frames processed (when processing video)
@@ -128,15 +124,15 @@ def process_pipeline(frame, keep_state=True):
     # compute offset in meter from center of the lane
     offset_meter = compute_offset_from_center(line_lt, line_rt, frame_width=frame.shape[1])
 
-    # draw the surface enclosed by lane lines back onto the original frame
-    blend_on_road = draw_back_onto_the_road(img_undistorted, Minv, line_lt, line_rt, keep_state)
-
-    # stitch on the top of final output images from different steps of the pipeline
-    blend_output = prepare_out_blend_frame(blend_on_road, img_binary, img_birdeye, img_fit, line_lt, line_rt, offset_meter)
+    # # draw the surface enclosed by lane lines back onto the original frame
+    # blend_on_road = draw_back_onto_the_road(img_undistorted, Minv, line_lt, line_rt, keep_state)
+    #
+    # # stitch on the top of final output images from different steps of the pipeline
+    # blend_output = prepare_out_blend_frame(blend_on_road, img_binary, img_birdeye, img_fit, line_lt, line_rt, offset_meter)
 
     processed_frames += 1
 
-    return blend_output
+    return offset_meter
 
 @app.route('/predict', methods=['POST'])
 def get_prediction():
@@ -146,15 +142,10 @@ def get_prediction():
     curr_sign_recognition_label = process_sign_recognition(image)
     blend = process_pipeline(image, keep_state=False)
 
-    '''
-    print(blend.shape)
-    plt.figure('image')
-    plt.imshow(blend)
-    cv2.imwrite('Output_image.png', blend)
-    '''
-    lists =blend.tolist()
-    json_str = json.dumps(lists)
-    return jsonify(sign=curr_sign_recognition_label, lane=json_str)
+    # lists =blend.tolist()
+    # print(blend)
+    # json_str = json.dumps(lists)
+    return jsonify(sign=curr_sign_recognition_label, lane=blend)
 
 
 def load_sign_recognition_model():
@@ -187,4 +178,4 @@ if __name__ == '__main__':
     # first things first: calibrate the camera
     ret, mtx, dist, rvecs, tvecs = calibrate_camera(calib_images_dir='camera_cal')
 
-    app.run(debug=True, host='0.0.0.0', port=1025)
+    app.run(debug=True, host='0.0.0.0', port=80)
