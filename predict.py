@@ -1,16 +1,12 @@
 from models.lane_detection.calibration_utils import calibrate_camera, undistort
 from models.lane_detection.binarization_utils import binarize
 from models.lane_detection.perspective_utils import birdeye
-from models.lane_detection.line_utils import get_fits_by_sliding_windows, draw_back_onto_the_road, Line, get_fits_by_previous_fits
+from models.lane_detection.line_utils import get_fits_by_sliding_windows, Line, get_fits_by_previous_fits
 from models.lane_detection.globals import xm_per_pix, time_window
 
-from tensorflow.keras.models import load_model
-from skimage import transform
-from skimage import exposure
 from flask import Flask, request, jsonify
 import numpy as np
 import cv2
-import json
 
 
 processed_frames = 0                    # counter of frames processed (when processing video)
@@ -21,20 +17,7 @@ sign_recognition_label_names = None
 app = Flask(__name__)
 
 
-
 def prepare_out_blend_frame(blend_on_road, img_binary, img_birdeye, img_fit, line_lt, line_rt, offset_meter):
-    """
-    Prepare the final pretty pretty output blend, given all intermediate pipeline images
-
-    :param blend_on_road: color image of lane blend onto the road
-    :param img_binary: thresholded binary image
-    :param img_birdeye: bird's eye view of the thresholded binary image
-    :param img_fit: bird's eye view with detected lane-lines highlighted
-    :param line_lt: detected left lane-line
-    :param line_rt: detected right lane-line
-    :param offset_meter: offset from the center of the lane
-    :return: pretty blend with all images and stuff stitched
-    """
     h, w = blend_on_road.shape[:2]
 
     thumb_ratio = 0.2
@@ -71,18 +54,6 @@ def prepare_out_blend_frame(blend_on_road, img_binary, img_birdeye, img_fit, lin
 
 
 def compute_offset_from_center(line_lt, line_rt, frame_width):
-    """
-    Compute offset from center of the inferred lane.
-    The offset from the lane center can be computed under the hypothesis that the camera is fixed
-    and mounted in the midpoint of the car roof. In this case, we can approximate the car's deviation
-    from the lane center as the distance between the center of the image and the midpoint at the bottom
-    of the image of the two lane-lines detected.
-
-    :param line_lt: detected left lane-line
-    :param line_rt: detected right lane-line
-    :param frame_width: width of the undistorted frame
-    :return: inferred offset
-    """
     if line_lt.detected and line_rt.detected:
         line_lt_bottom = np.mean(line_lt.all_x[line_lt.all_y > 0.95 * line_lt.all_y.max()])
         line_rt_bottom = np.mean(line_rt.all_x[line_rt.all_y > 0.95 * line_rt.all_y.max()])
@@ -97,13 +68,6 @@ def compute_offset_from_center(line_lt, line_rt, frame_width):
 
 
 def process_pipeline(frame, keep_state=True):
-    """
-    Apply whole lane detection pipeline to an input color frame.
-    :param frame: input color frame
-    :param keep_state: if True, lane-line state is conserved (this permits to average results)
-    :return: output blend with detected lane overlaid
-    """
-
     global line_lt, line_rt, processed_frames
 
     # undistort the image using coefficients found in calibration
@@ -123,59 +87,25 @@ def process_pipeline(frame, keep_state=True):
 
     # compute offset in meter from center of the lane
     offset_meter = compute_offset_from_center(line_lt, line_rt, frame_width=frame.shape[1])
-
-    # # draw the surface enclosed by lane lines back onto the original frame
-    # blend_on_road = draw_back_onto_the_road(img_undistorted, Minv, line_lt, line_rt, keep_state)
-    #
-    # # stitch on the top of final output images from different steps of the pipeline
-    # blend_output = prepare_out_blend_frame(blend_on_road, img_binary, img_birdeye, img_fit, line_lt, line_rt, offset_meter)
-
     processed_frames += 1
 
     return offset_meter
 
+
 @app.route('/predict', methods=['POST'])
 def get_prediction():
-    filestr = request.files['file'].read()  # "file" key'i ile gonderilen resmi al
-    npimg = np.frombuffer(filestr, np.uint8)
-    image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-    curr_sign_recognition_label = process_sign_recognition(image)
-    blend = process_pipeline(image, keep_state=False)
+    distance_from_center_arr = []
+    for key in request.files:
+        filestr = request.files[key].read()  # "file" key'i ile gonderilen resmi al
+        npimg = np.frombuffer(filestr, np.uint8)
+        image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+        distance_from_center = process_pipeline(image, keep_state=False)
+        distance_from_center_arr.append(distance_from_center)
 
-    # lists =blend.tolist()
-    # print(blend)
-    # json_str = json.dumps(lists)
-    return jsonify(sign=curr_sign_recognition_label, lane=blend)
-
-
-def load_sign_recognition_model():
-    global sign_recognition_model
-    global sign_recognition_label_names
-
-    print("[INFO] loading sign recognition model...")
-    sign_recognition_model = load_model("models/sign_recognition")
-    sign_recognition_label_names = open("models/sign_recognition/labels/signnames.csv").read().strip().split("\n")[1:]
-    sign_recognition_label_names = [l.split(",")[1] for l in sign_recognition_label_names]
-
-
-def process_sign_recognition(image):
-    image = transform.resize(image, (32, 32))
-    image = exposure.equalize_adapthist(image, clip_limit=0.1)
-
-    # preprocess the image by scaling it to the range [0, 1]
-    image = image.astype("float32") / 255.0
-    image = np.expand_dims(image, axis=0)
-    predictions = sign_recognition_model.predict(image)
-    j = predictions.argmax(axis=1)[0]
-    curr_label = sign_recognition_label_names[j]
-    return curr_label
-
+    return jsonify(distance_from_center_arr=distance_from_center_arr)
 
 
 if __name__ == '__main__':
-    # load model at the beginning once only
-    load_sign_recognition_model()
-    # first things first: calibrate the camera
     ret, mtx, dist, rvecs, tvecs = calibrate_camera(calib_images_dir='camera_cal')
 
-    app.run(debug=True, host='0.0.0.0', port=80)
+    app.run(debug=True, host='0.0.0.0', port=8000)
