@@ -89,6 +89,8 @@ def process_pipeline(frame, keep_state=True):
     offset_meter = compute_offset_from_center(line_lt, line_rt, frame_width=frame.shape[1])
     processed_frames += 1
 
+    print('OFFSET:', offset_meter)
+
     return offset_meter
 
 
