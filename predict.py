@@ -182,8 +182,9 @@ def get_prediction():
     distance_from_center_arr = []
     for key in request.files:
         filestr = request.files[key].read()  # "file" key'i ile gonderilen resmi al
-        # npimg = np.frombuffer(filestr, np.uint8)
-        img = cv2.imread(filestr, 0)
+        npimg = np.frombuffer(filestr, np.uint8)
+        img = cv2.imdecode(npimg, cv2.IMREAD_GRAYSCALE)
+        # img = cv2.imread(filestr, 0)
         blurred = gaussian_filter(img, sigma=3.0)
         canny_edges = cv2.Canny(blurred, 50, 120)
 
@@ -224,15 +225,14 @@ def get_prediction():
             y0, y1 = (dist - origin * np.cos(angle)) / (np.sin(angle) + 0.00001)
             ax.plot(origin, (y0, y1), '-r')
 
-        ax.savefig('./img.png')
+        plt.savefig('./img.png')
         print(lines)
 
 
-        # image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
         # distance_from_center = process_pipeline(img, keep_state=False)
         # distance_from_center_arr.append(distance_from_center)
 
-    return jsonify(distance_from_center_arr="distance_from_center_arr")
+    return jsonify(distance_from_center_arr="0")
 
 
 if __name__ == '__main__':
