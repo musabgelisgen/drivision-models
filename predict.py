@@ -8,6 +8,19 @@ from flask import Flask, request, jsonify
 import numpy as np
 import cv2
 
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+#from skimage.color import rgb2gray
+from scipy.ndimage import gaussian_filter
+from scipy import signal
+from PIL import Image
+import numpy as np
+import sys
+from collections import namedtuple
+import math
+import cv2
+from matplotlib import cm
+
 
 processed_frames = 0                    # counter of frames processed (when processing video)
 line_lt = Line(buffer_len=time_window)  # line on the left of the lane
@@ -94,17 +107,132 @@ def process_pipeline(frame, keep_state=True):
     return offset_meter
 
 
+def hough_transform(edge_img, no_of_lines):
+    # Build a dictionary to accumulate the votes. The keys are named tuples representing lines and the values are the votes that
+    #  those lines receive.
+    Line = namedtuple("Line", ["ro", "theta"])
+    votes = {}
+
+    # Since theta can have infinietly many different values, I discretized pi radians into 180 values.
+    # The line proposals will be made with these 60 theta values.
+    no_of_quantiles = 180
+    thetas = np.linspace(0, math.pi, num=no_of_quantiles, retstep=True)
+
+    # Iterate over the edge image and for each edge pixel, try line proposals and record the lines that such point voted for
+    for row_idx, row in enumerate(edge_img):
+        for col_idx, col in enumerate(row):
+            if col == 255:  # The canny edge detector sets the value for edge pixels and 0 for the rest
+                for theta in thetas[0]:
+                    # Calculate the distance value
+                    ro = int(round(col_idx * math.cos(theta) + row_idx * math.sin(theta)))
+                    line = Line(ro=ro, theta=theta)
+
+                    # If the line exists in the dictionary, incerement its vote by 1 else add it to the dictionary and set
+                    # its vote to 1
+                    if line in votes:
+                        votes[line] = votes[line] + 1
+                    else:
+                        votes[line] = 1
+
+    # Sort the lines based on their votes in order to output the largest no_of_lines amount of them
+    votes = {k: v for k, v in sorted(votes.items(), key=lambda item: item[1])}
+
+    # Code segment to plot hough space (should increase the number of theta quantiles for better plotting)
+    '''
+    max_vote = list(votes.items())[-1][1]
+    min_rho = sys.maxsize
+    max_rho = -sys.maxsize
+    for line in votes.keys():
+        if line.ro < min_rho:
+            min_rho = line.ro
+        if line.ro > max_rho:
+            max_rho = line.ro
+    hough_space = np.zeros([max_rho - min_rho, no_of_quantiles])
+    for line in votes.keys():
+        hough_space[line.ro - min_rho - 1][int(round(line.theta * no_of_quantiles / (math.pi))) - 1] = votes[line] * 255 / max_vote
+    plt.imshow(hough_space)
+    im = Image.fromarray(hough_space)
+    im = im.convert("L")
+    #im.save('PATH/TO/OUTPUT.png')
+    '''
+
+    return dict(list(votes.items())[-no_of_lines:])
+
+
+def intersection(line1, line2):
+    """Finds the intersection of two lines given in Hesse normal form.
+
+    Returns closest integer pixel locations.
+    See https://stackoverflow.com/a/383527/5087436
+    """
+    rho1, theta1 = line1
+    rho2, theta2 = line2
+    A = np.array([
+        [np.cos(theta1), np.sin(theta1)],
+        [np.cos(theta2), np.sin(theta2)]
+    ])
+    b = np.array([[rho1], [rho2]])
+    x0, y0 = np.linalg.solve(A, b)
+    x0, y0 = int(np.round(x0)), int(np.round(y0))
+    return [[x0, y0]]
+
+
 @app.route('/predict', methods=['POST'])
 def get_prediction():
     distance_from_center_arr = []
     for key in request.files:
         filestr = request.files[key].read()  # "file" key'i ile gonderilen resmi al
-        npimg = np.frombuffer(filestr, np.uint8)
-        image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-        distance_from_center = process_pipeline(image, keep_state=False)
-        distance_from_center_arr.append(distance_from_center)
+        # npimg = np.frombuffer(filestr, np.uint8)
+        img = cv2.imread(filestr, 0)
+        blurred = gaussian_filter(img, sigma=3.0)
+        canny_edges = cv2.Canny(blurred, 50, 120)
 
-    return jsonify(distance_from_center_arr=distance_from_center_arr)
+        detected_lines = hough_transform(canny_edges, 15)
+        lines = []
+        for line in detected_lines.keys():
+            lines.append([line.ro, line.theta])
+
+        max_theta = -1000
+        min_theta = 1000
+        for line in lines:
+            if max_theta < line[1]:
+                max_theta = line[1]
+                max_line = line
+            if min_theta > line[1]:
+                min_theta = line[1]
+                min_line = line
+
+        lines = []
+        lines.append(min_line)
+        lines.append(max_line)
+
+        x, y = intersection(min_line, max_line)[0]
+
+        print('x: ' + str(x) + ' y: ' + str(y))
+
+        # Plot the fitted lines over the edge image
+        fig, ax = plt.subplots()
+        plt.ylim(canny_edges.shape[0], 0)
+        plt.xlim(0, canny_edges.shape[1])
+        x_vals = np.arange(canny_edges.shape[1])
+        y_vals = [(line[0] / (math.sin(line[1]) + 0.00001) - x * math.tan(line[1])) for x in x_vals]
+        ax.imshow(img, cmap=cm.gray)
+        origin = np.array((0, canny_edges.shape[1]))
+        for line in lines:
+            angle = line[1]
+            dist = line[0]
+            y0, y1 = (dist - origin * np.cos(angle)) / (np.sin(angle) + 0.00001)
+            ax.plot(origin, (y0, y1), '-r')
+
+        ax.savefig('./img.png')
+        print(lines)
+
+
+        # image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+        # distance_from_center = process_pipeline(img, keep_state=False)
+        # distance_from_center_arr.append(distance_from_center)
+
+    return jsonify(distance_from_center_arr="distance_from_center_arr")
 
 
 if __name__ == '__main__':
