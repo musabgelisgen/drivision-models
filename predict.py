@@ -188,6 +188,10 @@ def get_prediction():
         blurred = gaussian_filter(img, sigma=3.0)
         canny_edges = cv2.Canny(blurred, 50, 120)
 
+        im = Image.fromarray(canny_edges)
+        # im.show()
+        im.save('img2.jpg')
+
         detected_lines = hough_transform(canny_edges, 15)
         lines = []
         for line in detected_lines.keys():
@@ -225,7 +229,7 @@ def get_prediction():
             y0, y1 = (dist - origin * np.cos(angle)) / (np.sin(angle) + 0.00001)
             ax.plot(origin, (y0, y1), '-r')
 
-        plt.savefig('./img.png')
+        plt.savefig('./img.jpg')
         print(lines)
 
 
