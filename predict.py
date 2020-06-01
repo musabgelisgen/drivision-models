@@ -236,7 +236,7 @@ def get_prediction():
         # distance_from_center = process_pipeline(img, keep_state=False)
         # distance_from_center_arr.append(distance_from_center)
 
-    return jsonify(distance_from_center_arr="0")
+    return jsonify(distance_from_center_arr="0", x=x, y=y)
 
 
 if __name__ == '__main__':
